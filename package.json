@@ -13,10 +13,15 @@
   "files": [
     "index.js",
     "client.js",
+    "src/client.js",
     "cordis.patch.yml",
     "README.md"
   ],
   "keywords": ["deepseek-harness", "dsh", "plugin", "text-measurement", "layout"],
+  "scripts": {
+    "build": "bun build src/client.js --outfile=client.js --format=cjs --target=browser",
+    "prepublishOnly": "bun run build"
+  },
   "dependencies": {
     "@chenglou/pretext": "^0.0.8"
   },
