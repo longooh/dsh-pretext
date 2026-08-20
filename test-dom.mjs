@@ -55,6 +55,24 @@ if (masks.length === 1) {
 }
 const maskWidthNow = masks.length ? parseFloat(masks[0].style.width) : null;
 
+// --- typewriter: React-style NESTED element tree (text at depth) ---
+const nested = document.createElement("div");
+const inner1 = document.createElement("div");
+const inner2 = document.createElement("div");
+const span = document.createElement("span");
+span.textContent = "嵌套深度三层的中文文本用于验证递归收集逻辑是否真的能触发打字机覆盖层效果。";
+inner2.appendChild(span);
+inner1.appendChild(inner2);
+nested.appendChild(inner1);
+Object.defineProperty(nested, "getBoundingClientRect", {
+  configurable: true,
+  value: () => ({ width: 460, height: 24, top: 0, left: 0, right: 460, bottom: 24 })
+});
+document.body.appendChild(nested);
+await new Promise((r) => setTimeout(r, 120));
+const masksNested = document.querySelectorAll(".dsh-hk-twmask");
+assert(masksNested.length === 1, `nested element tree (text at depth 3) triggers reveal (got ${masksNested.length})`);
+
 // --- typewriter completes and cleans up ---
 await new Promise((r) => setTimeout(r, 12000)); // speed 28 * 0.02/tick → ~0.56px/50ms → ~43s for 480px… speed it up instead
 // faster: bump speed via command, wait, expect cleanup

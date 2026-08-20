@@ -4470,6 +4470,17 @@ function startRain(canvas) {
 }
 function startTypewriter(cfgRef, ui) {
   var active = new Map;
+  function collectTextNodes(n, out) {
+    if (n.nodeType === 3) {
+      out.push(n);
+      return out;
+    }
+    if (n.nodeType !== 1)
+      return out;
+    for (var i = 0;i < n.childNodes.length; i++)
+      collectTextNodes(n.childNodes[i], out);
+    return out;
+  }
   function revealTick(block) {
     var entry = active.get(block);
     if (!entry)
@@ -4533,16 +4544,10 @@ function startTypewriter(cfgRef, ui) {
       var m = muts[i];
       if (m.type === "childList") {
         for (var j = 0;j < m.addedNodes.length; j++) {
-          var added = m.addedNodes[j];
-          if (added.nodeType === 3) {
-            handleTextNode(added);
-          } else if (added.nodeType === 1) {
-            var kids = added.childNodes;
-            for (var k = 0;k < kids.length; k++) {
-              if (kids[k].nodeType === 3)
-                handleTextNode(kids[k]);
-            }
-          }
+          var textNodes = [];
+          collectTextNodes(m.addedNodes[j], textNodes);
+          for (var k = 0;k < textNodes.length; k++)
+            handleTextNode(textNodes[k]);
         }
       } else if (m.type === "characterData") {
         handleTextNode(m.target);

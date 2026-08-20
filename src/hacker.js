@@ -297,6 +297,14 @@ function startRain(canvas) {
 
 function startTypewriter(cfgRef, ui) {
 	var active = new Map(); // blockEl -> { mask, clone, w, revealed }
+	// Recursively collect every descendant text node of a (possibly element)
+	// added node — React messages are element trees with text at any depth.
+	function collectTextNodes(n, out) {
+		if (n.nodeType === 3) { out.push(n); return out; }
+		if (n.nodeType !== 1) return out;
+		for (var i = 0; i < n.childNodes.length; i++) collectTextNodes(n.childNodes[i], out);
+		return out;
+	}
 	function revealTick(block) {
 		var entry = active.get(block);
 		if (!entry) return;
@@ -349,18 +357,14 @@ function startTypewriter(cfgRef, ui) {
 			var m = muts[i];
 			if (m.type === "childList") {
 				for (var j = 0; j < m.addedNodes.length; j++) {
-					// addedNodes may be element nodes whose text lives in
-					// child text nodes (React-style) — collect direct text
-					// children too, not just bare text nodes.
-					var added = m.addedNodes[j];
-					if (added.nodeType === 3) {
-						handleTextNode(added);
-					} else if (added.nodeType === 1) {
-						var kids = added.childNodes;
-						for (var k = 0; k < kids.length; k++) {
-							if (kids[k].nodeType === 3) handleTextNode(kids[k]);
-						}
-					}
+					// React inserts element trees, not bare text nodes — the
+					// added node is an element whose text lives arbitrarily
+					// deep (e.g. <div class=msg><div><span>text</span>...).
+					// Recursively collect every descendant text node so a
+					// message nested at any depth still triggers reveal.
+					var textNodes = [];
+					collectTextNodes(m.addedNodes[j], textNodes);
+					for (var k = 0; k < textNodes.length; k++) handleTextNode(textNodes[k]);
 				}
 			} else if (m.type === "characterData") {
 				handleTextNode(m.target);
