@@ -35,6 +35,7 @@
 // resolve (no importmap in the DSH web shell).
 import * as pretext from "@chenglou/pretext";
 import * as richInline from "@chenglou/pretext/rich-inline";
+import { initHacker } from "./hacker.js";
 
 window.__ModuleLoader__.load({
 	id: "dsh-pretext",
@@ -43,7 +44,7 @@ window.__ModuleLoader__.load({
 		var module = { exports: {} };
 		var exports = module.exports;
 
-		var VERSION = "0.2.0";
+		var VERSION = "0.3.0";
 
 		// ---- prepared cache (best practice: prepare once, layout hot-path) ----
 		// FIFO-evicting cache keyed by text|font|opts. `prepare()` and
@@ -190,6 +191,17 @@ window.__ModuleLoader__.load({
 			setCacheSize: setCacheSize,
 			// escape hatch
 			raw: raw
+		};
+
+		// Hacker text-effect engine (configurable chat text effects, terminal
+		// console control). Initialized in-browser; no-op surface otherwise.
+		// Exposed as `api.hacker` so other plugins can toggle effects too.
+		var hacker = initHacker(api);
+		api.hacker = {
+			getConfig: hacker.getConfig,
+			patchConfig: hacker.patchConfig,
+			execCommand: hacker.execCommand,
+			destroy: hacker.destroy
 		};
 
 		// Cordis plugin shape: the browser-side runner applies every client

@@ -1,7 +1,7 @@
 {
   "name": "dsh-pretext",
-  "version": "0.2.0",
-  "description": "Integrate @chenglou/pretext — fast, accurate text measurement & layout — into DeepSeek Harness Web GUI as a client module (best-practice wrapper: prepared cache, use-case 1/2 APIs, rich-inline, fitWidth/truncate)",
+  "version": "0.3.0",
+  "description": "Integrate @chenglou/pretext into DSH Web GUI as a client module (best-practice wrapper) + hacker-style configurable chat text effects (terminal console, typewriter, matrix rain, CRT scanlines)",
   "license": "MIT",
   "type": "module",
   "main": "index.js",
@@ -23,13 +23,15 @@
     "index.d.ts",
     "client.js",
     "src/client.js",
+    "src/hacker.js",
     "cordis.patch.yml",
     "README.md",
     "README.zh-CN.md"
   ],
-  "keywords": ["deepseek-harness", "dsh", "plugin", "text-measurement", "layout"],
+  "keywords": ["deepseek-harness", "dsh", "plugin", "text-measurement", "layout", "hacker", "typewriter"],
   "scripts": {
     "build": "bun build src/client.js --outfile=client.js --format=cjs --target=browser",
+    "test": "node test-hacker.mjs && node test-bundle.mjs && bun test-dom.mjs",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
@@ -43,5 +45,8 @@
       "platform": "web",
       "immediately": true
     }
+  },
+  "devDependencies": {
+    "happy-dom": "^20.11.6"
   }
 }

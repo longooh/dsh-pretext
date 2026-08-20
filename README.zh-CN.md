@@ -84,6 +84,37 @@ item 支持 `break: 'never'`（原子项，如 chip/mention）和
 在 **任何 prepare/measure 调用之前**，往文本里插入软连字符（`\u00AD`）。
 pretext 将其视为可选断点：未选中的软连字符不可见，选中的断点会物化为尾部 `-`。
 
+## Hacker 对话文字特效（可配置、默认部分关闭）
+
+`api.hacker` 给对话区加黑客/终端风格文字特效。右下角 `>_` 按钮打开**终端
+控制台**——像黑客一样敲命令：
+
+```
+❯ all on            # 总开关（主题 + 打字机 + 雨 + 发光 + 光标）
+❯ theme amber       # matrix | amber | mono（荧光主题）
+❯ tw on             # 打字机逐字显示（覆盖层实现，React 安全）
+❯ speed 60          # 打字机速度（1-200）
+❯ rain on           # Matrix 字符雨背景（canvas）
+❯ scanlines on      # CRT 扫描线
+❯ cursor off        # 闪烁方块光标
+❯ glow off          # 荧光文字发光
+❯ console off       # 隐藏本控制台按钮
+❯ status            # 查看当前配置
+❯ reset             # 恢复默认
+❯ help              # 命令列表
+```
+
+- **配置持久化**到 `localStorage["dsh-pretext:hacker"]`；默认：
+  `enabled:true, theme:matrix, typewriter:false, rain:false,
+  scanlines:false, cursor:true, glow:true, console:true`。
+- **编程控制**（其他 client 插件可用）：
+  `api.hacker.patchConfig({ typewriter: true })` /
+  `api.hacker.execCommand("theme amber")` / `api.hacker.getConfig()`。
+- **打字机说明**：用"遮罩 + 裁剪克隆层"做逐字 reveal，**不触碰 React 管理的
+  文本节点**（不会破坏虚拟 DOM 协调），打字过程中布局不抖动。只有长度超过
+  `typewriterMinLen`（默认 24）的文本才触发，可用 `patchConfig` 调整。
+- 特效是纯样式/覆盖层，对 DSH 未知 DOM 结构安全，且每一项都可单独关闭。
+
 ## 注意事项
 
 - 本 bundle **没有 UI** —— 它只是供其他 client 插件或 GUI 消费的能力。

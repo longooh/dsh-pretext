@@ -92,6 +92,40 @@ Insert soft hyphens (`\u00AD`) into the text **before** any prepare/measure
 call. Pretext treats them as optional break points: unchosen soft hyphens
 stay invisible; chosen breaks materialize as a trailing `-`.
 
+## Hacker text effects (configurable, opt-in)
+
+`api.hacker` adds hacker/terminal-style text effects to the chat. A
+bottom-right `>_` button opens a **terminal console** — type commands like a
+hacker:
+
+```
+❯ all on            # master switch (theme + typewriter + rain + glow + cursor)
+❯ theme amber       # matrix | amber | mono (phosphor themes)
+❯ tw on             # typewriter text reveal (overlay, React-safe)
+❯ speed 60          # typewriter speed (1-200)
+❯ rain on           # Matrix rain canvas background
+❯ scanlines on      # CRT scanline overlay
+❯ cursor off        # blinking block caret
+❯ glow off          # phosphor text glow
+❯ console off       # hide this console button
+❯ status            # show current config
+❯ reset             # restore defaults
+❯ help              # this list
+```
+
+- **Config** persists to `localStorage["dsh-pretext:hacker"]`; defaults:
+  `enabled:true, theme:matrix, typewriter:false, rain:false,
+  scanlines:false, cursor:true, glow:true, console:true`.
+- **Programmatic control** from any other client plugin:
+  `api.hacker.patchConfig({ typewriter: true })` /
+  `api.hacker.execCommand("theme amber")` / `api.hacker.getConfig()`.
+- **Typewriter notes**: it reveals by a mask + clipped clone overlay, so it
+  never touches the React-managed text node (no reconciliation breakage) and
+  the layout does not shift while typing. Only texts longer than
+  `typewriterMinLen` (default 24) trigger it; tweak via `patchConfig`.
+- Effects are a pure style/overlay layer — safe against unknown DSH DOM
+  structure, and every effect can be switched off.
+
 ## Notes
 
 - The bundle has **no UI** — it is a capability other client plugins or the
