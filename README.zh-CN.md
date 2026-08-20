@@ -1,3 +1,9 @@
+<div align="center">
+
+[English](README.md) · **简体中文**
+
+</div>
+
 # dsh-pretext
 
 将 [@chenglou/pretext](https://github.com/chenglou/pretext)（快速、精准、全面的
