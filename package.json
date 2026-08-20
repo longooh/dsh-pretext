@@ -24,7 +24,8 @@
     "client.js",
     "src/client.js",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "README.zh-CN.md"
   ],
   "keywords": ["deepseek-harness", "dsh", "plugin", "text-measurement", "layout"],
   "scripts": {
