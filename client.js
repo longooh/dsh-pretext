@@ -3903,15 +3903,441 @@ function setLocale(locale) {
   clearCache();
 }
 
+// node_modules/@chenglou/pretext/dist/rich-inline.js
+var exports_rich_inline = {};
+__export(exports_rich_inline, {
+  walkRichInlineLineRanges: () => walkRichInlineLineRanges,
+  prepareRichInline: () => prepareRichInline,
+  measureRichInlineStats: () => measureRichInlineStats,
+  materializeRichInlineLineRange: () => materializeRichInlineLineRange,
+  layoutNextRichInlineLineRange: () => layoutNextRichInlineLineRange
+});
+var COLLAPSIBLE_BOUNDARY_RE = /[ \t\n\f\r]+/;
+var LEADING_COLLAPSIBLE_BOUNDARY_RE = /^[ \t\n\f\r]+/;
+var TRAILING_COLLAPSIBLE_BOUNDARY_RE = /[ \t\n\f\r]+$/;
+var EMPTY_LAYOUT_CURSOR = { segmentIndex: 0, graphemeIndex: 0 };
+var RICH_INLINE_START_CURSOR = {
+  itemIndex: 0,
+  segmentIndex: 0,
+  graphemeIndex: 0
+};
+function getInternalPreparedRichInline(prepared) {
+  return prepared;
+}
+function cloneCursor(cursor) {
+  return {
+    segmentIndex: cursor.segmentIndex,
+    graphemeIndex: cursor.graphemeIndex
+  };
+}
+function isLineStartCursor(cursor) {
+  return cursor.segmentIndex === 0 && cursor.graphemeIndex === 0;
+}
+function getCollapsedSpaceWidth(font, letterSpacing, cache) {
+  const cacheKey = `${font}\x00${letterSpacing}`;
+  const cached = cache.get(cacheKey);
+  if (cached !== undefined)
+    return cached;
+  const options = letterSpacing === 0 ? undefined : { letterSpacing };
+  const joinedWidth = measureNaturalWidth(prepareWithSegments("A A", font, options));
+  const compactWidth = measureNaturalWidth(prepareWithSegments("AA", font, options));
+  const collapsedWidth = Math.max(0, joinedWidth - compactWidth);
+  cache.set(cacheKey, collapsedWidth);
+  return collapsedWidth;
+}
+function prepareWholeItemLine(prepared) {
+  const end = { segmentIndex: 0, graphemeIndex: 0 };
+  const width = stepPreparedLineGeometry(prepared, end, Number.POSITIVE_INFINITY);
+  if (width === null)
+    return null;
+  return {
+    endGraphemeIndex: end.graphemeIndex,
+    endSegmentIndex: end.segmentIndex,
+    width
+  };
+}
+function endsInsideFirstSegment(segmentIndex, graphemeIndex) {
+  return segmentIndex === 0 && graphemeIndex > 0;
+}
+function prepareRichInline(items) {
+  const preparedItems = [];
+  const itemsBySourceItemIndex = Array.from({ length: items.length });
+  const collapsedSpaceWidthCache = new Map;
+  let pendingGapWidth = 0;
+  for (let index = 0;index < items.length; index++) {
+    const item = items[index];
+    const letterSpacing = item.letterSpacing ?? 0;
+    const hasLeadingWhitespace = LEADING_COLLAPSIBLE_BOUNDARY_RE.test(item.text);
+    const hasTrailingWhitespace = TRAILING_COLLAPSIBLE_BOUNDARY_RE.test(item.text);
+    const trimmedText = item.text.replace(LEADING_COLLAPSIBLE_BOUNDARY_RE, "").replace(TRAILING_COLLAPSIBLE_BOUNDARY_RE, "");
+    if (trimmedText.length === 0) {
+      if (COLLAPSIBLE_BOUNDARY_RE.test(item.text) && pendingGapWidth === 0) {
+        pendingGapWidth = getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache);
+      }
+      continue;
+    }
+    const gapBefore = pendingGapWidth > 0 ? pendingGapWidth : hasLeadingWhitespace ? getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache) : 0;
+    const prepared = prepareWithSegments(trimmedText, item.font, letterSpacing === 0 ? undefined : { letterSpacing });
+    const wholeLine = prepareWholeItemLine(prepared);
+    if (wholeLine === null) {
+      pendingGapWidth = hasTrailingWhitespace ? getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache) : 0;
+      continue;
+    }
+    const preparedItem = {
+      break: item.break ?? "normal",
+      endGraphemeIndex: wholeLine.endGraphemeIndex,
+      endSegmentIndex: wholeLine.endSegmentIndex,
+      extraWidth: item.extraWidth ?? 0,
+      gapBefore,
+      naturalWidth: wholeLine.width,
+      prepared,
+      sourceItemIndex: index
+    };
+    preparedItems.push(preparedItem);
+    itemsBySourceItemIndex[index] = preparedItem;
+    pendingGapWidth = hasTrailingWhitespace ? getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache) : 0;
+  }
+  return {
+    items: preparedItems,
+    itemsBySourceItemIndex
+  };
+}
+function stepRichInlineLine(flow, maxWidth, cursor, collectFragment) {
+  if (flow.items.length === 0 || cursor.itemIndex >= flow.items.length)
+    return null;
+  const safeWidth = Math.max(1, maxWidth);
+  let lineWidth = 0;
+  let remainingWidth = safeWidth;
+  let itemIndex = cursor.itemIndex;
+  lineLoop:
+    while (itemIndex < flow.items.length) {
+      const item = flow.items[itemIndex];
+      if (!isLineStartCursor(cursor) && cursor.segmentIndex === item.endSegmentIndex && cursor.graphemeIndex === item.endGraphemeIndex) {
+        itemIndex++;
+        cursor.segmentIndex = 0;
+        cursor.graphemeIndex = 0;
+        continue;
+      }
+      const gapBefore = lineWidth === 0 ? 0 : item.gapBefore;
+      const atItemStart = isLineStartCursor(cursor);
+      if (item.break === "never") {
+        if (!atItemStart) {
+          itemIndex++;
+          cursor.segmentIndex = 0;
+          cursor.graphemeIndex = 0;
+          continue;
+        }
+        const occupiedWidth = item.naturalWidth + item.extraWidth;
+        const totalWidth = gapBefore + occupiedWidth;
+        if (lineWidth > 0 && totalWidth > remainingWidth)
+          break lineLoop;
+        collectFragment?.(item, gapBefore, occupiedWidth, cloneCursor(EMPTY_LAYOUT_CURSOR), {
+          segmentIndex: item.endSegmentIndex,
+          graphemeIndex: item.endGraphemeIndex
+        });
+        lineWidth += totalWidth;
+        remainingWidth = Math.max(0, safeWidth - lineWidth);
+        itemIndex++;
+        cursor.segmentIndex = 0;
+        cursor.graphemeIndex = 0;
+        continue;
+      }
+      const reservedWidth = gapBefore + item.extraWidth;
+      if (lineWidth > 0 && reservedWidth >= remainingWidth)
+        break lineLoop;
+      if (atItemStart) {
+        const totalWidth = reservedWidth + item.naturalWidth;
+        if (totalWidth <= remainingWidth) {
+          collectFragment?.(item, gapBefore, item.naturalWidth + item.extraWidth, cloneCursor(EMPTY_LAYOUT_CURSOR), {
+            segmentIndex: item.endSegmentIndex,
+            graphemeIndex: item.endGraphemeIndex
+          });
+          lineWidth += totalWidth;
+          remainingWidth = Math.max(0, safeWidth - lineWidth);
+          itemIndex++;
+          cursor.segmentIndex = 0;
+          cursor.graphemeIndex = 0;
+          continue;
+        }
+      }
+      const availableWidth = Math.max(1, remainingWidth - reservedWidth);
+      const lineEnd = {
+        segmentIndex: cursor.segmentIndex,
+        graphemeIndex: cursor.graphemeIndex
+      };
+      const lineWidthForItem = stepPreparedLineGeometry(item.prepared, lineEnd, availableWidth);
+      if (lineWidthForItem === null) {
+        itemIndex++;
+        cursor.segmentIndex = 0;
+        cursor.graphemeIndex = 0;
+        continue;
+      }
+      if (cursor.segmentIndex === lineEnd.segmentIndex && cursor.graphemeIndex === lineEnd.graphemeIndex) {
+        itemIndex++;
+        cursor.segmentIndex = 0;
+        cursor.graphemeIndex = 0;
+        continue;
+      }
+      const itemOccupiedWidth = lineWidthForItem + item.extraWidth;
+      const lineWidthContribution = gapBefore + itemOccupiedWidth;
+      if (lineWidth > 0 && atItemStart && lineWidthContribution > remainingWidth)
+        break lineLoop;
+      if (lineWidth > 0 && atItemStart && gapBefore > 0 && endsInsideFirstSegment(lineEnd.segmentIndex, lineEnd.graphemeIndex)) {
+        const freshLineEnd = { segmentIndex: 0, graphemeIndex: 0 };
+        const freshLineWidth = stepPreparedLineGeometry(item.prepared, freshLineEnd, Math.max(1, safeWidth - item.extraWidth));
+        if (freshLineWidth !== null && (freshLineEnd.segmentIndex > lineEnd.segmentIndex || freshLineEnd.segmentIndex === lineEnd.segmentIndex && freshLineEnd.graphemeIndex > lineEnd.graphemeIndex)) {
+          break lineLoop;
+        }
+      }
+      collectFragment?.(item, gapBefore, itemOccupiedWidth, cloneCursor(cursor), {
+        segmentIndex: lineEnd.segmentIndex,
+        graphemeIndex: lineEnd.graphemeIndex
+      });
+      lineWidth += lineWidthContribution;
+      remainingWidth = Math.max(0, safeWidth - lineWidth);
+      if (lineEnd.segmentIndex === item.endSegmentIndex && lineEnd.graphemeIndex === item.endGraphemeIndex) {
+        itemIndex++;
+        cursor.segmentIndex = 0;
+        cursor.graphemeIndex = 0;
+        continue;
+      }
+      cursor.segmentIndex = lineEnd.segmentIndex;
+      cursor.graphemeIndex = lineEnd.graphemeIndex;
+      break;
+    }
+  if (lineWidth === 0)
+    return null;
+  cursor.itemIndex = itemIndex;
+  return lineWidth;
+}
+function layoutNextRichInlineLineRange(prepared, maxWidth, start = RICH_INLINE_START_CURSOR) {
+  const flow = getInternalPreparedRichInline(prepared);
+  const end = {
+    itemIndex: start.itemIndex,
+    segmentIndex: start.segmentIndex,
+    graphemeIndex: start.graphemeIndex
+  };
+  const fragments = [];
+  const width = stepRichInlineLine(flow, maxWidth, end, (item, gapBefore, occupiedWidth, fragmentStart, fragmentEnd) => {
+    fragments.push({
+      itemIndex: item.sourceItemIndex,
+      gapBefore,
+      occupiedWidth,
+      start: fragmentStart,
+      end: fragmentEnd
+    });
+  });
+  if (width === null)
+    return null;
+  return {
+    fragments,
+    width,
+    end
+  };
+}
+function materializeFragmentText(item, fragment) {
+  return buildLineTextFromRange(item.prepared, getLineTextCache(item.prepared), fragment.start.segmentIndex, fragment.start.graphemeIndex, fragment.end.segmentIndex, fragment.end.graphemeIndex);
+}
+function materializeRichInlineLineRange(prepared, line) {
+  const flow = getInternalPreparedRichInline(prepared);
+  const fragments = [];
+  for (let i = 0;i < line.fragments.length; i++) {
+    const fragment = line.fragments[i];
+    const item = flow.itemsBySourceItemIndex[fragment.itemIndex];
+    if (item === undefined)
+      throw new Error("Missing rich-text inline item for fragment");
+    fragments.push({
+      itemIndex: fragment.itemIndex,
+      text: materializeFragmentText(item, fragment),
+      gapBefore: fragment.gapBefore,
+      occupiedWidth: fragment.occupiedWidth,
+      start: fragment.start,
+      end: fragment.end
+    });
+  }
+  return {
+    fragments,
+    width: line.width,
+    end: line.end
+  };
+}
+function walkRichInlineLineRanges(prepared, maxWidth, onLine) {
+  let lineCount = 0;
+  let cursor = RICH_INLINE_START_CURSOR;
+  while (true) {
+    const line = layoutNextRichInlineLineRange(prepared, maxWidth, cursor);
+    if (line === null)
+      return lineCount;
+    onLine(line);
+    lineCount++;
+    cursor = line.end;
+  }
+}
+function measureRichInlineStats(prepared, maxWidth) {
+  const flow = getInternalPreparedRichInline(prepared);
+  let lineCount = 0;
+  let maxLineWidth = 0;
+  const cursor = {
+    itemIndex: 0,
+    segmentIndex: 0,
+    graphemeIndex: 0
+  };
+  while (true) {
+    const lineWidth = stepRichInlineLine(flow, maxWidth, cursor);
+    if (lineWidth === null) {
+      return {
+        lineCount,
+        maxLineWidth
+      };
+    }
+    lineCount++;
+    if (lineWidth > maxLineWidth)
+      maxLineWidth = lineWidth;
+  }
+}
+
 // src/client.js
 window.__ModuleLoader__.load({
   id: "dsh-pretext",
   factory: (require2) => {
     var module2 = { exports: {} };
     var exports2 = module2.exports;
+    var VERSION = "0.2.0";
+    var cache = new Map;
+    var cacheMax = 200;
+    function cacheKey(text, font, opts) {
+      return opts === undefined ? text + "\x01" + font : text + "\x01" + font + "\x01" + JSON.stringify(opts);
+    }
+    function getPrepared(text, font, opts, segments) {
+      if (typeof text !== "string")
+        throw new TypeError("dsh-pretext: text must be a string");
+      if (typeof font !== "string" || font.length === 0)
+        throw new TypeError("dsh-pretext: font must be a canvas font shorthand string (e.g. '16px Inter')");
+      var key = cacheKey(text, font, opts);
+      var entry = cache.get(key);
+      if (entry === undefined) {
+        entry = segments ? prepareWithSegments(text, font, opts) : prepare(text, font, opts);
+        if (cache.size >= cacheMax)
+          cache.delete(cache.keys().next().value);
+        cache.set(key, entry);
+      }
+      return entry;
+    }
+    function measure(text, font, maxWidth, lineHeight, opts) {
+      if (!Number.isFinite(maxWidth))
+        throw new TypeError("dsh-pretext: measure maxWidth must be a number");
+      return layout(getPrepared(text, font, opts, false), maxWidth, lineHeight === undefined ? 20 : lineHeight);
+    }
+    function layoutLines(text, font, maxWidth, lineHeight, opts) {
+      if (!Number.isFinite(maxWidth))
+        throw new TypeError("dsh-pretext: layoutLines maxWidth must be a number");
+      return layoutWithLines(getPrepared(text, font, opts, true), maxWidth, lineHeight === undefined ? 20 : lineHeight);
+    }
+    function walkLineRanges2(text, font, maxWidth, onLine, opts) {
+      if (typeof onLine !== "function")
+        throw new TypeError("dsh-pretext: walkLineRanges onLine must be a function");
+      return walkLineRanges(getPrepared(text, font, opts, true), maxWidth, onLine);
+    }
+    function measureStats(text, font, maxWidth, opts) {
+      if (!Number.isFinite(maxWidth))
+        throw new TypeError("dsh-pretext: measureStats maxWidth must be a number");
+      return measureLineStats(getPrepared(text, font, opts, true), maxWidth);
+    }
+    function fitWidth(text, font, opts) {
+      return measureNaturalWidth(getPrepared(text, font, opts, true));
+    }
+    function truncate(text, font, maxWidth, opts) {
+      if (!Number.isFinite(maxWidth))
+        throw new TypeError("dsh-pretext: truncate maxWidth must be a number");
+      var ellipsis = opts && opts.ellipsis || "…";
+      var prepared = getPrepared(text, font, opts, true);
+      if (measureLineStats(prepared, maxWidth).lineCount <= 1)
+        return text;
+      var firstLineText = "";
+      walkLineRanges(prepared, maxWidth, function(line) {
+        if (!firstLineText)
+          firstLineText = materializeLineRange(prepared, line).text;
+      });
+      var chars = Array.from(firstLineText);
+      var ellipsisWidthOk = measureLineStats(getPrepared(ellipsis, font, undefined, true), maxWidth).lineCount <= 1;
+      var lo = 0, hi = chars.length, best = "";
+      while (lo <= hi) {
+        var mid = lo + hi >> 1;
+        var candidate = chars.slice(0, mid).join("") + ellipsis;
+        if (measureLineStats(getPrepared(candidate, font, opts, true), maxWidth).lineCount <= 1) {
+          best = candidate;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      return ellipsisWidthOk && best ? best : ellipsis;
+    }
+    function prepareRichInline2(items) {
+      if (!Array.isArray(items))
+        throw new TypeError("dsh-pretext: prepareRichInline items must be an array");
+      return prepareRichInline(items);
+    }
+    function walkRichInlineLineRanges2(prepared, maxWidth, onLine) {
+      return walkRichInlineLineRanges(prepared, maxWidth, onLine);
+    }
+    function materializeRichInlineLineRange2(prepared, line) {
+      return materializeRichInlineLineRange(prepared, line);
+    }
+    function measureRichInlineStats2(prepared, maxWidth) {
+      return measureRichInlineStats(prepared, maxWidth);
+    }
+    function layoutNextRichInlineLineRange2(prepared, maxWidth, start) {
+      return layoutNextRichInlineLineRange(prepared, maxWidth, start);
+    }
+    function clearCache2() {
+      cache.clear();
+      clearCache();
+    }
+    function setLocale2(locale) {
+      setLocale(locale);
+    }
+    function setCacheSize(n) {
+      cacheMax = Math.max(1, n | 0);
+      if (cache.size > cacheMax) {
+        var it = cache.keys();
+        while (cache.size > cacheMax)
+          cache.delete(it.next().value);
+      }
+    }
+    var raw = {
+      pretext: exports_layout,
+      richInline: exports_rich_inline
+    };
+    var api = {
+      version: VERSION,
+      measure,
+      layoutLines,
+      walkLineRanges: walkLineRanges2,
+      measureStats,
+      fitWidth,
+      truncate,
+      prepare: function(text, font, opts) {
+        return getPrepared(text, font, opts, false);
+      },
+      prepareWithSegments: function(text, font, opts) {
+        return getPrepared(text, font, opts, true);
+      },
+      prepareRichInline: prepareRichInline2,
+      walkRichInlineLineRanges: walkRichInlineLineRanges2,
+      materializeRichInlineLineRange: materializeRichInlineLineRange2,
+      measureRichInlineStats: measureRichInlineStats2,
+      layoutNextRichInlineLineRange: layoutNextRichInlineLineRange2,
+      richInline: exports_rich_inline,
+      clearCache: clearCache2,
+      setLocale: setLocale2,
+      setCacheSize,
+      raw
+    };
     exports2.name = "dsh-pretext";
     exports2.apply = function() {};
-    exports2.ready = Promise.resolve(exports_layout);
+    exports2.ready = Promise.resolve(api);
+    Object.assign(exports2, api);
     return module2.exports;
   }
 });

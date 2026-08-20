@@ -1,17 +1,26 @@
 {
   "name": "dsh-pretext",
-  "version": "0.1.0",
-  "description": "Integrate @chenglou/pretext — fast, accurate text measurement & layout — into DeepSeek Harness Web GUI as a client module",
+  "version": "0.2.0",
+  "description": "Integrate @chenglou/pretext — fast, accurate text measurement & layout — into DeepSeek Harness Web GUI as a client module (best-practice wrapper: prepared cache, use-case 1/2 APIs, rich-inline, fitWidth/truncate)",
   "license": "MIT",
   "type": "module",
   "main": "index.js",
+  "types": "./index.d.ts",
   "exports": {
-    ".": "./index.js",
-    "./client": "./client.js",
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    },
+    "./client": {
+      "types": "./index.d.ts",
+      "default": "./client.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "index.js",
+    "index.d.ts",
     "client.js",
     "src/client.js",
     "cordis.patch.yml",
